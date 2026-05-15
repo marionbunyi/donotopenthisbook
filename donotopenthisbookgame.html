@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hidden Mystery: Seven Challenges</title>
+<link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { overflow: hidden; background: black; font-family: 'Fredoka', sans-serif; width: 100vw; height: 100vh; }
+    #game { width: 100%; height: 100%; position: relative; overflow: hidden; cursor: none; }
+
+    #scene {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        object-fit: cover; filter: brightness(0.06);
+    }
+
+    #spotlight {
+        position: absolute; width: 140px; height: 140px;
+        border-radius: 50%; pointer-events: none; z-index: 10;
+        overflow: hidden;
+        -webkit-mask-image: radial-gradient(circle, black 5%, rgba(0, 0, 0, 0) 90%);
+        mask-image: radial-gradient(circle, black 5%, rgba(0, 0, 0, 0) 90%);
+        box-shadow: inset 0 0 40px rgba(0, 100, 255, 0.3);
+        background-repeat: no-repeat; mix-blend-mode: screen;
+    }
+
+    #targetHotspot {
+        position: absolute;
+        width: 100px; height: 100px;
+        border-radius: 50%;
+        z-index: 20;
+        cursor: none !important; 
+        display: none;
+        transform: translate(-50%, -50%);
+    }
+
+    /* UI ELEMENTS - MOVED TO BOTTOM */
+    #ui-container {
+        position: absolute;
+        bottom: 20px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        pointer-events: none;
+        z-index: 30;
+    }
+
+    #targetLabel { 
+        color: white; 
+        font-size: 26px; 
+        margin-bottom: 5px;
+        text-shadow: 2px 2px 4px black;
+    }
+
+    #title { 
+        font-family: 'Creepster'; 
+        font-size: 45px; 
+        color: #ffd700; 
+        text-shadow: 0 0 10px red; 
+    }
+
+    /* HUD BUTTONS */
+    .hud-btn {
+        position: absolute; top: 20px; z-index: 100; padding: 12px 20px;
+        background: #ffd700; border: none; border-radius: 12px;
+        font-weight: bold; cursor: default; font-family: 'Fredoka'; font-size: 14px;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.6); color: black;
+    }
+    .hud-btn:hover, .screen-btn:hover { cursor: pointer; }
+    #hudRestart { left: 20px; }
+    #hudSkip { right: 20px; }
+
+    /* OVERLAYS */
+    #foundOverlay { 
+        position: absolute; inset: 0; background: rgba(0,0,0,0.8); 
+        display: none; flex-direction: column; justify-content: center; 
+        align-items: center; z-index: 150; 
+    }
+    #foundText { 
+        color: #7dff7d; font-size: 50px; text-shadow: 0 0 20px lime; 
+        font-family: 'Creepster'; text-align: center; margin-bottom: 30px;
+    }
+
+    #startScreen, #winScreen { position: absolute; inset: 0; background: black; display: flex; justify-content: center; align-items: center; flex-direction: column; z-index: 200; }
+    .screen-btn { padding: 15px 40px; border: none; border-radius: 15px; background: #ffd700; font-size: 22px; font-weight: bold; box-shadow: 0 0 20px gold; }
+</style>
+</head>
+<body>
+
+<div id="game">
+    <img id="scene" src="">
+    <div id="spotlight"></div>
+    <div id="targetHotspot"></div>
+    
+    <button id="hudRestart" class="hud-btn">RESTART</button>
+    <button id="hudSkip" class="hud-btn">NEXT ROUND ➜</button>
+
+    <div id="ui-container">
+        <div id="targetLabel">Find: <span id="targetName">...</span></div>
+        <div id="title">HIDDEN MYSTERY</div>
+    </div>
+
+    <div id="foundOverlay">
+        <div id="foundText">YOU FOUND IT!</div>
+        <button id="overlayNextBtn" class="screen-btn">NEXT ROUND</button>
+    </div>
+
+    <div id="startScreen">
+        <h1 style="color:#ffd700; font-family:'Creepster'; font-size:70px; margin-bottom:30px;">HIDDEN MYSTERY</h1>
+        <button id="startBtn" class="screen-btn">START GAME</button>
+    </div>
+
+    <div id="winScreen" style="display:none;">
+        <h1 style="color:#7dff7d; font-family:'Creepster'; font-size:60px; text-align:center; margin-bottom:30px;">ALL SECRETS REVEALED!</h1>
+        <button id="playAgainBtn" class="screen-btn">PLAY AGAIN</button>
+    </div>
+</div>
+
+<audio id="bgMusic" loop><source src="https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/background%20music.mp3"></audio>
+<audio id="foundSound"><source src="https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/found%20it%20sound.mp3"></audio>
+<audio id="wrongSound"><source src="https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/wrong%20sound.mp3"></audio>
+
+<script>
+const rounds = [
+    { name:'FROG', image:'https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/frog.png', x: '93%', y: '86%' },
+    { name:'WITCH', image:'https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/witch.png', x: '20%', y: '73%' }, 
+    { name:'MONEY', image:'https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/money.png', x: '46%', y: '78%' },
+    { name:'CAR', image:'https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/car.png', x: '17%', y: '32%' },
+    { name:'GOLD', image:'https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/gold.png', x: '91%', y: '80%' },
+    { name:'BOOK', image:'https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/book.png', x: '50%', y: '5%' }, // Top center area is now clear!
+    { name:'MONSTER', image:'https://raw.githubusercontent.com/marionbunyi/donotopenthisbook/main/monster.jpg', x: '96%', y: '35%' }
+];
+
+let currentRound = 0;
+const scene = document.getElementById('scene');
+const spotlight = document.getElementById('spotlight');
+const hotspot = document.getElementById('targetHotspot');
+
+function loadRound() {
+    const data = rounds[currentRound];
+    scene.src = data.image;
+    document.getElementById('targetName').textContent = data.name;
+    document.getElementById('foundOverlay').style.display = 'none';
+    
+    hotspot.style.left = data.x;
+    hotspot.style.top = data.y;
+    hotspot.style.display = 'block';
+
+    if (data.name === 'MONSTER') {
+        hotspot.style.width = '60px';
+        hotspot.style.height = '60px';
+    } else {
+        hotspot.style.width = '100px';
+        hotspot.style.height = '100px';
+    }
+}
+
+function handleInput(e) {
+    const x = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+    const y = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+    spotlight.style.left = (x - 70) + 'px';
+    spotlight.style.top = (y - 70) + 'px';
+    spotlight.style.backgroundImage = `url(${scene.src})`;
+    spotlight.style.backgroundSize = `${window.innerWidth}px ${window.innerHeight}px`;
+    spotlight.style.backgroundPosition = `-${x - 70}px -${y - 70}px`;
+}
+
+window.addEventListener('mousemove', handleInput);
+window.addEventListener('touchmove', (e) => { handleInput(e); e.preventDefault(); }, {passive: false});
+
+hotspot.onclick = (e) => {
+    e.stopPropagation();
+    document.getElementById('foundSound').currentTime = 0;
+    document.getElementById('foundSound').play();
+    confetti({ particleCount: 200, spread: 80, origin: { y: 0.6 } });
+    document.getElementById('foundText').textContent = "FOUND THE " + rounds[currentRound].name + "!";
+    document.getElementById('foundOverlay').style.display = 'flex';
+};
+
+window.addEventListener('click', (e) => {
+    if(e.target.closest('.hud-btn') || e.target.closest('.screen-btn') || e.target === hotspot) return;
+    document.getElementById('wrongSound').currentTime = 0;
+    document.getElementById('wrongSound').play();
+});
+
+function goToNextRound() {
+    currentRound++;
+    if(currentRound >= rounds.length) {
+        document.getElementById('winScreen').style.display = 'flex';
+    } else {
+        loadRound();
+    }
+}
+
+document.getElementById('startBtn').onclick = () => {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('bgMusic').play().catch(()=>{});
+    loadRound();
+};
+
+document.getElementById('hudRestart').onclick = () => location.reload();
+document.getElementById('hudSkip').onclick = goToNextRound;
+document.getElementById('overlayNextBtn').onclick = goToNextRound;
+document.getElementById('playAgainBtn').onclick = () => location.reload();
+
+</script>
+</body>
+</html>
